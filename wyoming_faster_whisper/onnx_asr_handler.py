@@ -32,6 +32,8 @@ class OnnxAsrTranscriber(Transcriber):
         with patch("huggingface_hub.snapshot_download", snapshot_download_with_cache):
             self.onnx_model = onnx_asr.load_model(model_id)
 
+        self.device = "cpu"
+
     def transcribe(
         self,
         wav_path: Union[str, Path],

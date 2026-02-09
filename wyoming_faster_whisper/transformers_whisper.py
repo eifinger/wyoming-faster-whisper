@@ -29,6 +29,7 @@ class TransformersTranscriber(Transcriber):
             model_id, cache_dir=cache_dir, local_files_only=local_files_only
         )
         self.model.eval()
+        self.device = str(self.model.device)
 
     def transcribe(
         self,

@@ -4,6 +4,16 @@
 
 - Fix transformers language
 - Add initial prompt to transformers
+- Add optional speaker identification via `--embeddings-file`
+- Add speaker output modes: `context` (default) and `json-text`
+- Add speaker enrollment script: `script/enroll_speakers.py`
+- Add optional FastAPI web UI for speaker enrollment/testing (`--web-server`)
+- Add `speaker` and `web` optional dependency groups and include them in Docker image
+- Add speaker dependency compatibility checks at startup and Docker build (detect `pkg_resources`/setuptools mismatch early)
+- Add a sane default for `--embeddings-file` (`<first data dir>/speakers.pkl`) and auto-enable speaker ID when present
+- Add optional `nemo` STT backend for NVIDIA Parakeet models (`--stt-library nemo`)
+- Add CUDA-oriented Docker build args for torch index/package and install extras
+- Add startup runtime summary log for selected backend/model/device and torch/CUDA status
 
 ## 3.1.0
 

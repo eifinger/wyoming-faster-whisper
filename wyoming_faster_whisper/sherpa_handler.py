@@ -22,7 +22,12 @@ _URL_FORMAT = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-model
 class SherpaTranscriber(Transcriber):
     """Wrapper for sherpa-onnx model."""
 
-    def __init__(self, model_id: str, cache_dir: Union[str, Path]) -> None:
+    def __init__(
+        self,
+        model_id: str,
+        cache_dir: Union[str, Path],
+        device: str = "cpu",
+    ) -> None:
         """Initialize model."""
         cache_dir = Path(cache_dir)
         model_dir = cache_dir / model_id
@@ -47,12 +52,28 @@ class SherpaTranscriber(Transcriber):
                 raise
 
         # Load model
+        provider = "cpu"
+        if device in ("cuda", "auto"):
+            try:
+                available_providers = set(so.get_available_providers())
+            except Exception:  # pylint: disable=broad-except
+                available_providers = set()
+
+            if "cuda" in available_providers:
+                provider = "cuda"
+            elif device == "cuda":
+                _LOGGER.warning(
+                    "Sherpa CUDA provider not available; falling back to cpu"
+                )
+
+        self.device = provider
+
         self.recognizer = so.OfflineRecognizer.from_transducer(
             encoder=f"{model_dir}/encoder.int8.onnx",
             decoder=f"{model_dir}/decoder.int8.onnx",
             joiner=f"{model_dir}/joiner.int8.onnx",
             tokens=f"{model_dir}/tokens.txt",
-            provider="cpu",
+            provider=provider,
             model_type="nemo_transducer",
         )
 

@@ -1,0 +1,46 @@
+version: "3.9"
+services:
+  wyoming-faster-whisper:
+    container_name: wyoming-faster-whisper
+    image: wyoming-faster-whisper:cuda
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TORCH_EXTRA_INDEX_URL: "https://download.pytorch.org/whl/cu121"
+        TORCH_PACKAGE: "torch==2.5.1+cu121"
+        INSTALL_EXTRAS: "zeroconf,transformers,sherpa,onnx-asr,speaker,web,nemo"
+
+    restart: unless-stopped
+    gpus: all
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "all"
+      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+      HF_HOME: "/data/huggingface"
+
+    ports:
+      - "10300:10300" # Wyoming
+      - "8099:8099"   # Web UI
+
+    volumes:
+      - ${PWD}/data:/data
+
+    command:
+      - --uri
+      - tcp://0.0.0.0:10300
+      - --data-dir
+      - /data
+      - --download-dir
+      - /data
+      - --stt-library
+      - nemo
+      - --model
+      - nvidia/parakeet-tdt-0.6b-v3
+      - --device
+      - cuda
+      - --language
+      - en
+      - --web-server
+      - --speaker-reference-dir
+      - /data/speaker_samples

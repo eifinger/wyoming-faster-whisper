@@ -51,6 +51,7 @@ class ModelLoader:
         self._transcriber_lock: Dict[TRANSCRIBER_KEY, asyncio.Lock] = defaultdict(
             asyncio.Lock
         )
+        self._last_selection: Optional[TRANSCRIBER_KEY] = None
 
     async def load_transcriber(self, language: Optional[str] = None) -> Transcriber:
         """Load or get transcriber from cache for a language."""
@@ -85,12 +86,29 @@ class ModelLoader:
             has_onnx_asr = False
             _LOGGER.debug("Onnx-ASR is NOT available")
 
+        try:
+            from .nemo_parakeet_handler import NemoParakeetTranscriber
+
+            has_nemo = True
+            _LOGGER.debug("NeMo is available")
+        except ImportError:
+            has_nemo = False
+            _LOGGER.debug("NeMo is NOT available")
+
         # Select speech-to-text library
         if stt_library == SttLibrary.AUTO:
             # Default to faster-whisper
             stt_library = SttLibrary.FASTER_WHISPER
 
-            if self.model is None:  # auto
+            if self.model and self.model.startswith("nvidia/parakeet"):
+                if has_nemo:
+                    stt_library = SttLibrary.NEMO
+                else:
+                    _LOGGER.warning(
+                        "NVIDIA Parakeet model requested but NeMo dependencies "
+                        "are missing; install with the 'nemo' extra"
+                    )
+            elif self.model is None:  # auto
                 if (language == "ru") and has_onnx_asr:
                     # Prefer GigaAM via onnx-asr
                     stt_library = SttLibrary.ONNX_ASR
@@ -103,10 +121,18 @@ class ModelLoader:
             ((stt_library == SttLibrary.TRANSFORMERS) and (not has_transformers))
             or ((stt_library == SttLibrary.SHERPA) and (not has_sherpa))
             or ((stt_library == SttLibrary.ONNX_ASR) and (not has_onnx_asr))
+            or ((stt_library == SttLibrary.NEMO) and (not has_nemo))
         ):
             # Fall back to faster-whisper
             stt_library = SttLibrary.FASTER_WHISPER
             _LOGGER.debug("Falling back to faster-whisper (missing dependencies)")
+
+        if self.model and self.model.startswith("nvidia/parakeet"):
+            if stt_library != SttLibrary.NEMO:
+                raise RuntimeError(
+                    "NVIDIA Parakeet models require --stt-library nemo and the "
+                    "optional 'nemo' dependencies"
+                )
 
         # Select model
         model = self.model
@@ -124,6 +150,7 @@ class ModelLoader:
         assert model
 
         key = (stt_library, model)
+        self._last_selection = key
 
         async with self._transcriber_lock[key]:
             transcriber = self._transcriber.get(key)
@@ -133,7 +160,19 @@ class ModelLoader:
             if stt_library == SttLibrary.SHERPA:
                 from .sherpa_handler import SherpaTranscriber  # noqa: F811
 
-                transcriber = SherpaTranscriber(model, self.download_dir)
+                transcriber = SherpaTranscriber(
+                    model,
+                    self.download_dir,
+                    device=self.device,
+                )
+            elif stt_library == SttLibrary.NEMO:
+                from .nemo_parakeet_handler import NemoParakeetTranscriber  # noqa: F811
+
+                transcriber = NemoParakeetTranscriber(
+                    model,
+                    self.download_dir,
+                    device=self.device,
+                )
             elif stt_library == SttLibrary.ONNX_ASR:
                 from .onnx_asr_handler import OnnxAsrTranscriber  # noqa: F811
 
@@ -163,6 +202,11 @@ class ModelLoader:
             self._transcriber[key] = transcriber
 
         return transcriber
+
+    @property
+    def last_selection(self) -> Optional[TRANSCRIBER_KEY]:
+        """Most recently selected (stt_library, model)."""
+        return self._last_selection
 
     async def transcribe(
         self, wav_path: Union[str, Path], language: Optional[str]
@@ -208,6 +252,9 @@ def guess_model(stt_library: SttLibrary, language: Optional[str], is_arm: bool) 
 
     if stt_library == SttLibrary.ONNX_ASR:
         return "gigaam-v2-rnnt"
+
+    if stt_library == SttLibrary.NEMO:
+        return "nvidia/parakeet-tdt-0.6b-v3"
 
     # faster-whisper
     if is_arm:

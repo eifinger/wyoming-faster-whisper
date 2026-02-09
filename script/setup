@@ -14,6 +14,11 @@ parser.add_argument(
     "--transformers", action="store_true", help="Install transformers requirements"
 )
 parser.add_argument("--sherpa", action="store_true", help="Install sherpa requirements")
+parser.add_argument("--nemo", action="store_true", help="Install NeMo requirements")
+parser.add_argument(
+    "--speaker", action="store_true", help="Install speaker identification requirements"
+)
+parser.add_argument("--web", action="store_true", help="Install web UI requirements")
 args = parser.parse_args()
 
 # Create virtual environment
@@ -24,7 +29,7 @@ builder.create(_VENV_DIR)
 # Upgrade dependencies
 pip = [context.env_exe, "-m", "pip"]
 subprocess.check_call(pip + ["install", "--upgrade", "pip"])
-subprocess.check_call(pip + ["install", "--upgrade", "setuptools", "wheel"])
+subprocess.check_call(pip + ["install", "--upgrade", "setuptools<81", "wheel"])
 
 extras = []
 if args.dev:
@@ -35,6 +40,15 @@ if args.transformers:
 
 if args.sherpa:
     extras.append("sherpa")
+
+if args.nemo:
+    extras.append("nemo")
+
+if args.speaker:
+    extras.append("speaker")
+
+if args.web:
+    extras.append("web")
 
 extras_str = ""
 if extras:
